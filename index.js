@@ -48,15 +48,33 @@ client.on('interactionCreate', async (interaction) => {
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('⭐ แบ่งปันรีวิวของคุณ')
-        .setDescription('กดปุ่มด้านล่างเพื่อให้คะแนนและเขียนรีวิว รีวิวของคุณจะถูกโพสต์ในห้องนี้')
-        .setFooter({ text: 'ขอบคุณที่สละเวลารีวิวให้เรา' });
+        .setDescription(
+          '> กดปุ่ม **📝 เขียนรีวิว** ด้านล่างเพื่อให้คะแนนและเล่าประสบการณ์ของคุณ\n' +
+          '> รีวิวของคุณจะถูกโพสต์ลงในห้องนี้ทันที ไม่ต้องพิมพ์คำสั่งใดๆ\n\n' +
+          '**วิธีใช้งาน**\n' +
+          '1️⃣ กดปุ่มด้านล่าง\n' +
+          '2️⃣ ให้คะแนน 1-5 ดาว\n' +
+          '3️⃣ เขียนความคิดเห็น\n' +
+          '4️⃣ กดส่ง — เสร็จเรียบร้อย!'
+        )
+        .setThumbnail(interaction.guild?.iconURL({ size: 256 }) || null)
+        .setFooter({
+          text: `${interaction.guild?.name ?? 'ร้านของเรา'} • ขอบคุณที่สละเวลารีวิวให้เรา 💜`,
+          iconURL: interaction.guild?.iconURL() || undefined,
+        })
+        .setTimestamp();
+
+      const bannerUrl = process.env.REVIEW_BANNER_URL;
+      if (bannerUrl) {
+        embed.setImage(bannerUrl);
+      }
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(REVIEW_BUTTON_ID)
           .setLabel('เขียนรีวิว')
           .setEmoji('📝')
-          .setStyle(ButtonStyle.Primary),
+          .setStyle(ButtonStyle.Success),
       );
 
       await interaction.channel.send({ embeds: [embed], components: [row] });
@@ -109,16 +127,22 @@ client.on('interactionCreate', async (interaction) => {
 
       const stars = '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
 
+      // สีของ embed จะไล่ตามคะแนน: 5-4 ดาว = เขียว, 3 ดาว = เหลือง, 2-1 ดาว = แดง
+      const ratingColors = { 5: 0x57f287, 4: 0x57f287, 3: 0xfee75c, 2: 0xed4245, 1: 0xed4245 };
+
       const reviewEmbed = new EmbedBuilder()
-        .setColor(0xfee75c)
+        .setColor(ratingColors[rating] ?? 0xfee75c)
         .setAuthor({
           name: interaction.user.tag,
           iconURL: interaction.user.displayAvatarURL(),
         })
+        .setThumbnail(interaction.user.displayAvatarURL({ size: 256 }))
         .addFields(
-          { name: 'คะแนน', value: `${stars} (${rating}/5)` },
-          { name: 'ความคิดเห็น', value: comment },
+          { name: '⭐ คะแนน', value: `${stars}\n**${rating}/5**`, inline: true },
+          { name: '👤 รีวิวโดย', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '💬 ความคิดเห็น', value: comment },
         )
+        .setFooter({ text: 'ขอบคุณสำหรับรีวิว 💜' })
         .setTimestamp();
 
       const reviewChannelId = process.env.REVIEW_CHANNEL_ID;
