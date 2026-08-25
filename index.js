@@ -124,15 +124,12 @@ client.on('interactionCreate', async (interaction) => {
           name: interaction.user.tag,
           iconURL: interaction.user.displayAvatarURL(),
         })
-        .setDescription(
-          `✅ **รีวิวจากลูกค้าจริง • ${interaction.guild?.name ?? ''}**\n\n` +
-          `> *"${comment.replace(/\n/g, '\n> ')}"*`
-        )
+        .setTitle(`${stars}  ·  ${rating}/5`)
+        .setDescription(`*"${comment.replace(/\n/g, '\n')}"*`)
         .addFields(
-          { name: '⭐ คะแนน', value: `${stars}  **${rating}/5**`, inline: true },
           { name: '👤 รีวิวโดย', value: `<@${interaction.user.id}>`, inline: true },
         )
-        .setFooter({ text: 'ขอบคุณสำหรับรีวิว 💜' })
+        .setFooter({ text: `✦ ${interaction.guild?.name ?? ''} ✦ ขอบคุณสำหรับรีวิว` })
         .setTimestamp();
 
       const reviewChannelId = process.env.REVIEW_CHANNEL_ID;
