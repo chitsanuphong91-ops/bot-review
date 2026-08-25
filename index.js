@@ -6,6 +6,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -25,8 +26,38 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-const REVIEW_BUTTON_ID = 'open_review_modal';
-const REVIEW_MODAL_ID = 'review_modal';
+// =====================================================================
+// 🛒 รายการสินค้า/บริการที่ให้ลูกค้าเลือกตอนเขียนรีวิว
+// แก้ไข/เพิ่ม/ลบได้เลยตรงนี้ — แต่ละอันมี value (ห้ามซ้ำกัน, ห้ามมีเว้นวรรค/ตัวอักษรพิเศษ),
+// label (ข้อความที่ลูกค้าเห็น), และ emoji (ไม่บังคับ)
+// สูงสุด 25 รายการ (ข้อจำกัดของ Discord)
+// =====================================================================
+const PRODUCTS = [
+  // ---------- WINDOW OS ----------
+  { value: 'kernel', label: 'KERNEL', emoji: '💿' },
+  { value: 'gg_os', label: 'GG-OS', emoji: '💿' },
+  { value: 'ghost', label: 'GHOST', emoji: '💿' },
+  { value: 'aura_iot_ltsc', label: 'AURA-IoT-Enterprise-LTSC', emoji: '💿' },
+  { value: 'snyx_os', label: 'SNYX-OS', emoji: '💿' },
+  { value: '10_ltsc', label: '10-LTSC', emoji: '💿' },
+  // ---------- WINDOWS PLAYBOOK ----------
+  { value: 'jrtwec_x', label: 'JRTWEC-X', emoji: '🖥️' },
+  { value: 'atlas', label: 'ATLAS', emoji: '🖥️' },
+  { value: 'fsos_x', label: 'FSOS-X', emoji: '🖥️' },
+  { value: 'sapphireos', label: 'SapphireOS', emoji: '🖥️' },
+  // ---------- FIVEM ----------
+  { value: 'boots_fps_pack', label: 'Boots-FPS-pack', emoji: '🎮' },
+  { value: 'reduce_delay_kbm', label: 'ลดดีเลย์คีย์บอร์ด/เมาส์', emoji: '🎮' },
+  { value: 'program', label: 'Program', emoji: '🎮' },
+  { value: 'increase_hz_cpu', label: 'เพิ่ม-HZ-CPU', emoji: '🎮' },
+  { value: 'setting_bios', label: 'Setting BIOS', emoji: '🎮' },
+  // ---------- อื่นๆ ----------
+  { value: 'other', label: 'อื่นๆ', emoji: '📦' },
+];
+
+const REVIEW_BUTTON_ID = 'open_review_modal'; // ไม่ได้ใช้แล้ว เก็บไว้เผื่ออ้างอิง
+const PRODUCT_SELECT_ID = 'select_review_product';
+const REVIEW_MODAL_PREFIX = 'review_modal';
 const RATING_INPUT_ID = 'review_rating';
 const COMMENT_INPUT_ID = 'review_comment';
 
@@ -36,7 +67,7 @@ client.once('ready', () => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
-    // ---------- /setup-review : โพสต์แผงปุ่ม ----------
+    // ---------- /setup-review : โพสต์แผงเลือกสินค้า ----------
     if (interaction.isChatInputCommand() && interaction.commandName === 'setup-review') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         return interaction.reply({
@@ -49,7 +80,7 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(0x5865f2)
         .setTitle('⭐ แบ่งปันรีวิวของคุณ')
         .setDescription(
-          'กดปุ่ม **📝 เขียนรีวิว** ด้านล่างเพื่อให้คะแนนและเล่าประสบการณ์ของคุณ\n' +
+          'เลือก **สินค้า/บริการ** ที่คุณใช้จากเมนูด้านล่าง แล้วให้คะแนน + เขียนรีวิวได้เลย\n' +
           'รีวิวของคุณจะถูกโพสต์ลงในห้องนี้ทันที ไม่ต้องพิมพ์คำสั่งใดๆ'
         )
         .setFooter({
@@ -58,21 +89,28 @@ client.on('interactionCreate', async (interaction) => {
         });
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(REVIEW_BUTTON_ID)
-          .setLabel('เขียนรีวิว')
-          .setEmoji('📝')
-          .setStyle(ButtonStyle.Success),
+        new StringSelectMenuBuilder()
+          .setCustomId(PRODUCT_SELECT_ID)
+          .setPlaceholder('📝 เลือกสินค้า/บริการเพื่อเขียนรีวิว')
+          .addOptions(
+            PRODUCTS.map((p) => ({
+              label: p.label,
+              value: p.value,
+              emoji: p.emoji,
+            })),
+          ),
       );
 
       await interaction.channel.send({ embeds: [embed], components: [row] });
       return interaction.reply({ content: '✅ ตั้งค่าแผงรีวิวเรียบร้อย', ephemeral: true });
     }
 
-    // ---------- กดปุ่ม "เขียนรีวิว" -> เด้ง Modal ----------
-    if (interaction.isButton() && interaction.customId === REVIEW_BUTTON_ID) {
+    // ---------- เลือกสินค้าจากเมนู -> เด้ง Modal ----------
+    if (interaction.isStringSelectMenu() && interaction.customId === PRODUCT_SELECT_ID) {
+      const productValue = interaction.values[0];
+
       const modal = new ModalBuilder()
-        .setCustomId(REVIEW_MODAL_ID)
+        .setCustomId(`${REVIEW_MODAL_PREFIX}:${productValue}`)
         .setTitle('เขียนรีวิว');
 
       const ratingInput = new TextInputBuilder()
@@ -101,14 +139,17 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ---------- ส่ง Modal -> โพสต์รีวิวลงห้อง ----------
-    if (interaction.isModalSubmit() && interaction.customId === REVIEW_MODAL_ID) {
+    if (interaction.isModalSubmit() && interaction.customId.startsWith(`${REVIEW_MODAL_PREFIX}:`)) {
+      const productValue = interaction.customId.split(':')[1];
+      const product = PRODUCTS.find((p) => p.value === productValue);
+
       const ratingRaw = interaction.fields.getTextInputValue(RATING_INPUT_ID).trim();
       const comment = interaction.fields.getTextInputValue(COMMENT_INPUT_ID).trim();
 
       const rating = parseInt(ratingRaw, 10);
       if (isNaN(rating) || rating < 1 || rating > 5) {
         return interaction.reply({
-          content: '❌ กรุณาใส่คะแนนเป็นตัวเลข 1-5 เท่านั้น ลองกดปุ่มรีวิวใหม่อีกครั้ง',
+          content: '❌ กรุณาใส่คะแนนเป็นตัวเลข 1-5 เท่านั้น ลองเลือกสินค้าและรีวิวใหม่อีกครั้ง',
           ephemeral: true,
         });
       }
@@ -127,6 +168,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${stars}  ·  ${rating}/5`)
         .setDescription(`*"${comment.replace(/\n/g, '\n')}"*`)
         .addFields(
+          { name: '🛒 สินค้า/บริการ', value: `${product?.emoji ?? '📦'} ${product?.label ?? 'ไม่ระบุ'}`, inline: true },
           { name: '👤 รีวิวโดย', value: `<@${interaction.user.id}>`, inline: true },
         )
         .setFooter({ text: `✦ ${interaction.guild?.name ?? ''} ✦ ขอบคุณสำหรับรีวิว` })
